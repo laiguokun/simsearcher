@@ -4,12 +4,14 @@
 #include <cmath>
 #include <iostream>
 #include <cstring>
-const int mode = 999997;
-const long long mode2 = 99999999999997;
-const int hash_size = 1000000;
+const int mode = 1000003;
+const int mode2 = 10000003;
+const int hash_size = 1000005;
 const int max_int = 1000000;
-const int u = 10;
-const int M = 2;
+const double u = 0.0085;
+const double u1 = 0.0085;
+double M = 0;
+double M1 = 0;
 using namespace std;
 
 SimSearcher::SimSearcher()
@@ -39,27 +41,25 @@ void split(string& s, string& delim, vector<string>& ret)
 {  
 	ret.clear();
     size_t last = 0;  
-    size_t index=s.find_first_of(delim,last);  
-    while (index!=string::npos)  
-    {  
-        ret.push_back(s.substr(last,index-last));  
-        last=index+1;  
-        index=s.find_first_of(delim,last);  
-    }  
-    if (index-last>0)  
-    {  
-        ret.push_back(s.substr(last,index-last));  
-    }  
+	for (int i = 0; i < s.length(); i++)
+		if (s[i] == ' ') 
+		{
+			ret.push_back(s.substr(last, (i - last)));
+			last = i + 1;
+		}
+	ret.push_back(s.substr(last, (s.length() - last)));
 }  
 
-int myhash(string& str, long long* dataset)
+int myhash(string& str, int* dataset)
 {
 	int res = 0;
-	long long res2 = 0;
+	int res2 = 0;
 	for (int i = 0; i < str.length(); i++)
 	{
-		res = (res * 29 + str[i]) % mode;
-		res2 = (res2 * 39 + str[i]) % mode2;
+		res = (res * 29 + str[i]);
+		if (res >= mode) res = res % mode;
+		res2 = (res2 * 39 + str[i]);
+		if (res2 >= mode2) res2 = res % mode2;
 	}
 	res2 ++;
 	while (dataset[res] != 0 && dataset[res] != res2)
@@ -72,14 +72,16 @@ int myhash(string& str, long long* dataset)
 	return res;
 }
 
-int search(string& str, long long* dataset)
+int search(string& str, int* dataset)
 {
 	int res = 0;
-	long long res2 = 0;
+	int res2 = 0;
 	for (int i = 0; i < str.length(); i++)
 	{
-		res = (res * 29 + str[i]) % mode;
-		res2 = (res2 * 39 + str[i]) % mode2;
+		res = (res * 29 + str[i]);
+		if (res >= mode) res = res % mode;
+		res2 = (res2 * 39 + str[i]);
+		if (res2 >= mode2) res2 = res % mode2;
 	}
 	res2 ++;
 	while (dataset[res] != 0 && dataset[res] != res2)
@@ -92,7 +94,7 @@ int search(string& str, long long* dataset)
 	return res;
 }
 
-double verify_jaccard(int* query, int s1, int* dataset, int s2, double threshold)
+double verify_jaccard(int* query, int& s1, int* dataset, int& s2, double& threshold)
 {
 	int h1 = 0, h2 = 0;
 	int cnt = 0;
@@ -117,6 +119,21 @@ void SimSearcher::clear()
 {
 
 }
+vector<string> w;
+vector<int> tmp;	
+void SimSearcher::convert(string &str, string &sep, vector<int>& word)
+{
+	w.clear();
+	tmp.clear();
+	split(str, sep, w);
+	for (int i = 0; i < w.size(); i++)
+		tmp.push_back(myhash(w[i], jaccard_hash));
+	sort(tmp.begin(), tmp.end());
+	word.push_back(tmp[0]);
+	for (int i = 1; i < tmp.size(); i++)
+		if (tmp[i] != tmp[i-1])
+			word.push_back(tmp[i]);
+}
 
 int SimSearcher::createIndex(const char *filename, unsigned q)
 {
@@ -130,35 +147,36 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 	//build invert list of jaccard
 	//clear
 	clear();
-	jaccard_hash = new long long[hash_size];
+	jaccard_hash = new int[hash_size];
 	jaccard_list = new vector<int>*[hash_size];
 	context_hash = new int*[context.size()];
 	context_word_len = new int[context.size()];
-	memset(jaccard_hash, 0, sizeof(long long) * hash_size);
+	memset(jaccard_hash, 0, sizeof(int) * hash_size);
 	for (int i = 0; i < hash_size; i++)
 	{
 		jaccard_list[i] = NULL;
 	}
-	vector<string> word;
+	vector<int> word;
 	for (int i = 0; i < context.size(); i++)
 	{
 		word.clear();
-		split(context[i], sep, word);
+		convert(context[i], sep, word); 
 		context_hash[i] = new int[word.size()];
 		for (int j = 0; j < word.size(); j++)
 		{
-			int mark = myhash(word[j], jaccard_hash);
+			int mark = word[j];
 			if (jaccard_list[mark] == NULL)
 			{
 				jaccard_list[mark] = new vector<int>;
 				jaccard_list[mark]->clear();
 			}
 			jaccard_list[mark]->push_back(i);
+			if (jaccard_list[mark]->size() > M1) M1 = jaccard_list[mark]->size();
 			context_hash[i][j] = mark;
-			context_word_len[i] = word.size();
-			if (min_context_len > context_word_len[i])
-				min_context_len = context_word_len[i];
 		}
+		context_word_len[i] = word.size();
+		if (min_context_len > context_word_len[i])
+			min_context_len = context_word_len[i];
 		sort(context_hash[i],context_hash[i]+word.size());
 //		cout << i << endl;
 	}
@@ -166,9 +184,9 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 	//clear
 	ql.clear();
 	q_gram = q;
-	ed_hash = new long long[hash_size];
+	ed_hash = new int[hash_size];
 	ed_list = new vector<int>*[hash_size];
-	memset(ed_hash, 0, sizeof(long long) * hash_size);
+	memset(ed_hash, 0, sizeof(int) * hash_size);
 	for (int i = 0; i < hash_size; i++)
 	{
 		ed_list[i] = NULL;
@@ -178,17 +196,15 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 		int r = context[i].length() - q + 1;
 		for (int j = 0; j < r; j++)
 		{
-//			cout << i << " " << j <<endl;
 			string str = context[i].substr(j, q);
-//			cout << str << endl;
 			int mark = myhash(str, ed_hash);
-//			cout << "fuck" << endl;
 			if (ed_list[mark] == NULL)
 			{
 				ed_list[mark] = new vector<int>;
 				ed_list[mark]->clear();
 			}
 			ed_list[mark]->push_back(i);
+			if (ed_list[mark]->size() > M) M = ed_list[mark]->size();
 		}
 	}
 //	cout << "fuck" <<endl;		
@@ -210,27 +226,28 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 	string str(query);
 	//find candidate
 	candid_list.clear();
-	split(str, sep, word);
+	vector<int> word;
+	word.clear();
+	convert(str, sep, word); 
 	int word_num = word.size();
 	int* word_list = new int[word_num];
 	int tmp = 0;
 	//calc threshold
 	double t1 = (double) ((word_num + min_context_len) * threshold) / (1.0 + threshold);
-	int thres = getmax(ceil(threshold * word_num), ceil(t1));
+	int thres;
+	if (ceil(threshold * word_num) >= ceil(t1)) thres = ceil(threshold * word_num); else thres = ceil(t1);
 	candid.clear();
 	int* str_hash = new int[word_num];
 	for (int i = 0; i < word_num; i++)
 	{
-		word_list[i] = search(word[i], jaccard_hash);
-		str_hash[i] = word_list[i];
+		word_list[i] = word[i];
 		if (word_list[i] != -1)
 			candid_list.push_back(make_pair(jaccard_list[word_list[i]]->size(), word_list[i]));
 	}
-	sort(candid_list.begin(), candid_list.end(), cmp);
-	sort(str_hash, str_hash + word_num);
 	int* candid_set = new int[context.size()];
 	memset(candid_set, 0, sizeof(int) * context.size());
-	int f = thres - u;
+//	int f = thres - u1;
+int f = (double)thres/(u1*log(M1) + 1.0);
 	tmp = (word_num - (f));
 	if (tmp <= 0 || thres == 0 || thres <= u)
 	{
@@ -239,18 +256,16 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 			if (word_list[i] != -1)
 				for (int j = 0; j < jaccard_list[word_list[i]]->size(); j++)
 				{
-	//				cout << (*jaccard_list[word_list[i]])[j] << endl;
 					candid_set[(*jaccard_list[word_list[i]])[j]] ++;
 				}
 		}
 		for (int i = 0; i < context.size(); i++)
-		{
 			if (candid_set[i] >= thres)
 				candid.push_back(i);
-		}
 	}
 	else
 	{
+		sort(candid_list.begin(), candid_list.end(), cmp);
 		candid_num.clear();
 		for (int i = 0; i < tmp; i++)
 			for (int j = 0; j < candid_list[i].first; j++)
@@ -283,11 +298,10 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 	sort(candid.begin(),candid.end());
 	for (int i = 0; i < candid.size(); i++)
 	{
-		double jaccard = (verify_jaccard(str_hash, word_num, context_hash[candid[i]], context_word_len[candid[i]], threshold));
+		double jaccard = (verify_jaccard(word_list, word_num, context_hash[candid[i]], context_word_len[candid[i]], threshold));
 		if (jaccard >= threshold)
 			result.push_back(make_pair(candid[i], jaccard));
 	}
-	delete[] str_hash;
 	delete[] word_list;
 	delete[] candid_set;
 	return SUCCESS;
@@ -311,37 +325,43 @@ int verify_ed(string s1, string s2, int threshold)
 		s2 = tmp;
 	}
 	int** dp = new int*[2];
-	dp[0] = new int[s2.length()];
-	dp[1] = new int[s2.length()]; 
-	for (int i = 0; i < s2.length(); i++)
+	int len1 = s1.length(), len2 = s2.length();
+	dp[0] = new int[len2];
+	dp[1] = new int[len2]; 
+	for (int i = 0; i < len2; i++)
 	{
 		if (s1[0] == s2[i]) dp[0][i] = i; else dp[0][i] = i + 1;
-		if (i > 0) dp[0][i] = getmin(dp[0][i], dp[0][i-1] + 1);
+		if (i > 0 && dp[0][i-1] + 1 < dp[0][i]) dp[0][i] = dp[0][i-1] + 1;
 	}
 	int now = 0;
 //	cout << s1 << " " << s2  <<endl;
 	if (s1.length() > 1)
-		for (int i = 1; i < s1.length(); i++)
+		for (int i = 1; i < len1; i++)
 		{
 			now = now ^ 1;
-			int l,r;
-			l = getmax(i - threshold, 0);
-			r = getmin(i + threshold + 1, s2.length());
+			int l = 0,r = len2;
+			if (i - threshold > l) l = i - threshold;
+			if (i + threshold + 1 < r) r = i + threshold + 1;
 			bool ok = true;
 			for (int j = l; j < r; j++)
 			{
 				dp[now][j] = max_int;
-				if (okf(i-1, j-1, threshold)) 
+				if (i > 0 && j > 0) //				if (okf(i-1, j-1, threshold)) 
 				{
-					if (s1[i] == s2[j]) dp[now][j] = getmin(dp[now][j], dp[now ^ 1][j-1]);
-						else dp[now][j] = getmin(dp[now][j], dp[now ^ 1][j-1] + 1);
+					if (s1[i] == s2[j])
+					{
+						if (dp[now ^ 1][j - 1] < dp [now][j]) dp[now][j] = dp[now ^ 1][j-1];
+					}
+					else 
+					{
+						if (dp[now ^ 1][j - 1] + 1 < dp[now][j]) dp[now][j] = dp[now ^ 1][j-1] + 1;
+					}
 				}
-				if (okf(i-1, j, threshold))
-					dp[now][j] = getmin(dp[now][j], dp[now ^ 1][j] + 1);
-				if (okf(i, j-1, threshold))
-					dp[now][j] = getmin(dp[now][j], dp[now][j-1] + 1);
-				if (dp[now][j] <= threshold) ok = false;
-//				cout << i << " " << j << " " << dp[now][j] << endl;
+				if (i > 0 && myabs(j - i + 1) <= threshold && dp[now ^ 1][j] + 1 < dp[now][j]) //(okf(i-1, j, threshold))
+					dp[now][j] = dp[now ^ 1][j] + 1;
+				if (j > 0 && myabs(j - 1 - i) <= threshold && dp[now][j-1] + 1 < dp[now][j]) // (okf(i, j-1, threshold))
+					dp[now][j] = dp[now][j-1] + 1;
+				if (ok && dp[now][j] <= threshold) ok = false;
 			}	
 			if (ok) 
 			{
@@ -351,7 +371,7 @@ int verify_ed(string s1, string s2, int threshold)
 				return max_int;
 			}
 		}
-	int result = dp[now][s2.length() - 1];
+	int result = dp[now][len2 - 1];
 	for (int j = 0; j < 2; j++)
 		delete[] dp[j];
 	delete[] dp;
@@ -363,11 +383,9 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 {
 	result.clear(); 
 	string str(query);
+	int len = str.length();
 	//calc threshold
-	int thres = getmax(str.length() - q_gram + 1 - threshold * q_gram, 0);
-//	thres = 0;
-//	cout << thres << endl;
-	int tmp;
+	int thres = getmax(len - q_gram + 1 - threshold * q_gram, 0);
 	candid.clear();
 	candid_list.clear();
 	if (thres == 0)
@@ -375,9 +393,7 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 			candid.push_back(i);
 	else
 	{
-//		for (int i = 0; i < ql.size(); i++)
-//			candid.push_back(ql[i]);
-		int word_num = str.length() - q_gram + 1;
+		int word_num = len - q_gram + 1;
 		int* word_list = new int[word_num];
 		for (int i = 0; i < word_num; i++)
 		{
@@ -386,12 +402,10 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 			if (word_list[i] != -1)
 				candid_list.push_back(make_pair(ed_list[word_list[i]]->size(), word_list[i]));
 		}
-		sort(candid_list.begin(), candid_list.end(), cmp);
 		int* candid_set = new int[context.size()];
 		memset(candid_set, 0, sizeof(int) * context.size());
-		int f = thres - u;
-		tmp = (word_num - f);
-//		tmp = 0;
+		int f = (double)thres/(u*log(M) + 1.0);
+		int tmp = (word_num - f);
 		if (tmp <= 0 || thres == 0 || thres <= u)
 		{
 			for (int i = 0; i < word_num; i++)
@@ -410,6 +424,7 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 		}
 		else
 		{
+			sort(candid_list.begin(), candid_list.end(), cmp);
 			candid_num.clear();
 			for (int i = 0; i < tmp; i++)
 			{
@@ -428,8 +443,7 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 				if (myabs(context[candid_num[i]].length() - str.length()) > threshold) continue;
 				for (int j = tmp; j < candid_list.size(); j++)
 				{
-					if (cnt >= thres)
-						break;
+					if (cnt >= thres) break;
 					int h = 0, t = candid_list[j].first, mid;
 					while (h < t - 1)
 					{

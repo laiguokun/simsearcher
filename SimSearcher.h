@@ -24,13 +24,14 @@ public:
 //	vector< vector<int> > ed_list;	
 	vector<int> ql;
 //	string** jaccard_hash;
-	long long* jaccard_hash;
+	int* jaccard_hash;
 	int	min_context_len;
 	string sep;
 	int q_gram;
 	vector<int>** ed_list;
-	long long* ed_hash;
+	int* ed_hash;
 	void clear();
+	void convert(string&, string&, vector<int>&);
 	int createIndex(const char *filename, unsigned q);
 	int searchJaccard(const char *query, double threshold, std::vector<std::pair<unsigned, double> > &result);
 	int searchED(const char *query, unsigned threshold, std::vector<std::pair<unsigned, unsigned> > &result);
