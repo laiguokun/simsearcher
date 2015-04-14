@@ -8,8 +8,8 @@ const int mode = 1000003;
 const int mode2 = 10000003;
 const int hash_size = 1000005;
 const int max_int = 0xffff;
-const double u = 0.0085;
-const double u1 = 0.0085;
+const double u = 0.005;
+const double u1 = 0.009;
 double M = 0;
 double M1 = 0;
 using namespace std;
@@ -211,6 +211,7 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 	candid_list = new pair<int,int> [context.size()];
 	candid_set = new int[context.size()];
 	candid_ys = new int[context.size()];
+	word_list = new int[500];
 	for (int i = 0; i < context.size(); i++)
 		candid_ys[i] = -1;
 	//build jaccard index
@@ -295,13 +296,11 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 	word.clear();
 	convert(query, word, 1);
 	int word_num = word.size();
-	int* word_list = new int[word_num];
 	int tmp = 0;
 	double t1 = (double) ((word_num + min_context_len) * threshold) / (1.0 + threshold);
 	int thres;
 	if (ceil(threshold * word_num) >= ceil(t1)) thres = ceil(threshold * word_num); else thres = ceil(t1);
 	int l_c = 0, l_cn=0, l_cl = 0;
-	int* str_hash = new int[word_num];
 	for (int i = 0; i < word_num; i++)
 	{
 		word_list[i] = word[i];
@@ -378,7 +377,6 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 		if (jaccard >= threshold)
 			result.push_back(make_pair(candid[i], jaccard));
 	}
-	delete[] word_list;
 	return SUCCESS;
 }
 
@@ -463,7 +461,6 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 		}
 	else
 	{
-		int* word_list = new int[word_num];
 		for (int i = 0; i < word_num; i++)
 		{
 			word_list[i] = searcha(query, ed_hash, i, q_gram);
@@ -535,7 +532,6 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 				}
 			}
 		}
-		delete[] word_list;
 	}
 	sort(candid, candid + l_c);
 	for (int i = 0; i < l_c; i++)
