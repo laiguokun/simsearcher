@@ -20,13 +20,6 @@ public:
 	int* context_word_len;
 	int* context_len;
 	vector<int>** jaccard_list;
-	int* candid;
-	int* candid_num;
-	pair<int,int>* candid_list;
-	int* candid_set;
-	int* candid_ys;
-	int* left;
-	int* word_list;
 //	map<string,int> jaccard_hash;
 //	vector< vector<int> > jaccard_list;
 //	map<string,int> ed_hash;

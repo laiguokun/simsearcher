@@ -8,13 +8,13 @@ const int mode = 1000003;
 const int mode2 = 10000003;
 const int hash_size = 1000005;
 const int max_int = 0xffff;
-const double u = 0.005;
-const double u1 = 0.009;
+const double u = 0.0085;
+const double u1 = 0.0085;
 double M = 0;
 double M1 = 0;
 using namespace std;
 
-void k_big(pair<int,int>* arr,int low,int high, int k)
+void k_big(vector< pair<int,int> >& arr,int low,int high, int k)
 {
 	int tmp = low + rand()%(high - low+1);
 	pair <int, int> pivot = arr[tmp]; arr[tmp] = arr[low]; arr[low] = pivot;
@@ -48,6 +48,7 @@ void k_big(pair<int,int>* arr,int low,int high, int k)
 
 SimSearcher::SimSearcher()
 {
+	sep = " ";
 }
 
 SimSearcher::~SimSearcher()
@@ -206,14 +207,6 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 		context_pre.push_back(str);
 		context.push_back(str.c_str());
 	}
-	candid = new int[context.size()];
-	candid_num = new int[context.size()];
-	candid_list = new pair<int,int> [context.size()];
-	candid_set = new int[context.size()];
-	candid_ys = new int[context.size()];
-	word_list = new int[500];
-	for (int i = 0; i < context.size(); i++)
-		candid_ys[i] = -1;
 	//build jaccard index
 	//build invert list of jaccard
 	//clear
@@ -224,7 +217,6 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 	context_word_len = new int[context.size()];
 	context_len = new int[context.size()];
 	memset(jaccard_hash, 0, sizeof(int) * hash_size);
-	q = 5;
 	for (int i = 0; i < hash_size; i++)
 	{
 		jaccard_list[i] = NULL;
@@ -279,7 +271,8 @@ int SimSearcher::createIndex(const char *filename, unsigned q)
 			ed_list[mark]->push_back(i);
 			if (ed_list[mark]->size() > M) M = ed_list[mark]->size();
 		}
-	}		
+	}
+//	cout << "fuck" <<endl;		
 	return SUCCESS;
 }
 
@@ -288,28 +281,34 @@ inline int cmp(pair<int, int> a, pair<int, int> b)
 	return a.first < b.first;
 }
 
+vector<int> candid_num;
+vector<int> candid;
+vector< pair<int, int> > candid_list;
 int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<unsigned, double> > &result)
 {
 	result.clear();
 	//find candidate
+	candid_list.clear();
 	vector<int> word;
 	word.clear();
 	convert(query, word, 1);
 	int word_num = word.size();
+	int* word_list = new int[word_num];
 	int tmp = 0;
 	double t1 = (double) ((word_num + min_context_len) * threshold) / (1.0 + threshold);
 	int thres;
 	if (ceil(threshold * word_num) >= ceil(t1)) thres = ceil(threshold * word_num); else thres = ceil(t1);
-	int l_c = 0, l_cn=0, l_cl = 0;
+	candid.clear();
+	candid_list.clear();
+	int* str_hash = new int[word_num];
 	for (int i = 0; i < word_num; i++)
 	{
 		word_list[i] = word[i];
 		if (word_list[i] != -1)
-		{
-			candid_list[l_cl] = (make_pair(jaccard_list[word_list[i]]->size(), word_list[i]));
-			l_cl ++;
-		}
+			candid_list.push_back(make_pair(jaccard_list[word_list[i]]->size(), word_list[i]));
 	}
+	int* candid_set = new int[context.size()];
+	memset(candid_set, 0, sizeof(int) * context.size());
 	int f = (double)thres/(u1*log(M1) + 1.0);
 	tmp = (word_num - (f));
 	if (tmp <= 0 || thres == 0 || thres <= u)
@@ -324,59 +323,48 @@ int SimSearcher::searchJaccard(const char *query, double threshold, vector<pair<
 		}
 		for (int i = 0; i < context.size(); i++)
 			if (candid_set[i] >= thres)
-			{
-				candid[l_c] = (i);
-				l_c ++;
-			}
+				candid.push_back(i);
 	}
 	else
 	{
-		k_big(candid_list, 0, l_cl-1, tmp);
+		k_big(candid_list, 0, candid_list.size()-1, tmp);
+		candid_num.clear();
 		for (int i = 0; i < tmp; i++)
 			for (int j = 0; j < candid_list[i].first; j++)
 			{
-				if (candid_ys[(*jaccard_list[candid_list[i].second])[j]] == -1)
-				{
-					candid_num[l_cn] = ((*jaccard_list[candid_list[i].second])[j]);
-					candid_set[l_cn] = 0;
-					candid_ys[((*jaccard_list[candid_list[i].second])[j])] = l_cn;
-					l_cn ++;
-				}
-				candid_set[candid_ys[(*jaccard_list[candid_list[i].second])[j]]] ++;
+				if (candid_set[(*jaccard_list[candid_list[i].second])[j]] == 0)
+					candid_num.push_back((*jaccard_list[candid_list[i].second])[j]);
+				candid_set[(*jaccard_list[candid_list[i].second])[j]] ++;
 			}
 		int cnt;
-		for (int i = 0; i < l_cn; i++)
+		for (int i = 0; i < candid_num.size(); i++)
 		{
-			int tt = candid_num[i];
-			candid_ys[tt] = -1;
-			cnt = candid_set[i];
+			cnt = candid_set[candid_num[i]];
 			if (cnt < (thres - f)) continue;
-			for (int j = tmp; j < l_cl; j++)
+			for (int j = tmp; j < candid_list.size(); j++)
 			{
 				if (cnt >= thres) break;
 				int h = 0, t = candid_list[j].first, mid;
 				while (h < t - 1)
 				{
 					mid = (h + t) >> 1;
-					if ((*jaccard_list[candid_list[j].second])[mid] <= tt) h = mid; else t = mid;
+					if ((*jaccard_list[candid_list[j].second])[mid] <= candid_num[i]) h = mid; else t = mid;
 				}
-				if ((*jaccard_list[candid_list[j].second])[h] == tt) cnt ++;
+				if ((*jaccard_list[candid_list[j].second])[h] == candid_num[i]) cnt ++;
 			}
-//			cout << cnt << " " << thres<< endl;
 			if (cnt >= thres)
-			{
-				candid[l_c] = (tt);
-				l_c ++;
-			}
+				candid.push_back(candid_num[i]);
 		}
 	}
-	sort(candid, candid + l_c);
-	for (int i = 0; i < l_c; i++)
+	sort(candid.begin(),candid.end());
+	for (int i = 0; i < candid.size(); i++)
 	{
 		double jaccard = (verify_jaccard(word_list, word_num, context_hash[candid[i]], context_word_len[candid[i]], threshold));
 		if (jaccard >= threshold)
 			result.push_back(make_pair(candid[i], jaccard));
 	}
+	delete[] word_list;
+	delete[] candid_set;
 	return SUCCESS;
 }
 
@@ -399,9 +387,7 @@ int verify_ed(const char* s1, int len1, const char* s2, int len2, int threshold)
 	int** dp = new int*[2];
 	dp[0] = new int[len2];
 	dp[1] = new int[len2]; 
-	int t;
-	if (len2 <= threshold) t = len2; else t = threshold + 1;
-	for (int i = 0; i < t; i++)
+	for (int i = 0; i < len2; i++)
 	{
 		if (s1[0] == s2[i]) dp[0][i] = i; else dp[0][i] = i + 1;
 		if (i > 0 && dp[0][i-1] + 1 < dp[0][i]) dp[0][i] = dp[0][i-1] + 1;
@@ -437,9 +423,17 @@ int verify_ed(const char* s1, int len1, const char* s2, int len2, int threshold)
 				if (ok && dp[now][j] <= threshold) ok = false;
 			}	
 			if (ok) 
+			{
+				for (int j = 0; j < 2; j++)
+					delete[] dp[j];
+				delete[] dp;
 				return max_int;
+			}
 		}
 	int result = dp[now][len2 - 1];
+	for (int j = 0; j < 2; j++)
+		delete[] dp[j];
+	delete[] dp;
 	return result;
 }
 
@@ -451,25 +445,23 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 	int len = strlen(query);
 	//calc threshold
 	int thres = getmax(len - q_gram + 1 - threshold * q_gram, 0);
-	int word_num = len - q_gram + 1;
-	int l_c = 0, l_cn=0, l_cl = 0;
+	candid.clear();
 	if (thres == 0)
 		for (int i = 0; i < context.size(); i++)
-		{
-			candid[l_c] = (i);
-			l_c ++;
-		}
+			candid.push_back(i);
 	else
 	{
+		candid_list.clear();
+		int word_num = len - q_gram + 1;
+		int* word_list = new int[word_num];
 		for (int i = 0; i < word_num; i++)
 		{
 			word_list[i] = searcha(query, ed_hash, i, q_gram);
 			if (word_list[i] != -1)
-			{
-				candid_list[l_cl] = (make_pair(ed_list[word_list[i]]->size(), word_list[i]));
-				l_cl ++;
-			}
+				candid_list.push_back(make_pair(ed_list[word_list[i]]->size(), word_list[i]));
 		}
+		int* candid_set = new int[context.size()];
+		memset(candid_set, 0, sizeof(int) * context.size());
 		int f = (double)thres/(u*log(M) + 1.0);
 		int tmp = (word_num - f);
 		if (tmp <= 0 || thres == 0 || thres <= u)
@@ -484,57 +476,49 @@ int SimSearcher::searchED(const char *query, unsigned threshold, vector<pair<uns
 			{
 				if (candid_set[i] >= thres)
 				{
-					candid[l_c] = (i);
-					l_c ++;
+					candid.push_back(i);
 				}
 			}
 		}
 		else
 		{
-			k_big(candid_list, 0, l_cl-1, tmp);
+			k_big(candid_list, 0, candid_list.size()-1, tmp);
+			candid_num.clear();
 			for (int i = 0; i < tmp; i++)
 			{
 				for (int j = 0; j < candid_list[i].first; j++)
 				{
-					if (candid_ys[(*ed_list[candid_list[i].second])[j]] == -1)
-					{
-						candid_num[l_cn] = ((*ed_list[candid_list[i].second])[j]);
-						candid_set[l_cn] = 0;
-						candid_ys[((*ed_list[candid_list[i].second])[j])] = l_cn;
-						l_cn ++;
-					}
-					candid_set[candid_ys[(*ed_list[candid_list[i].second])[j]]] ++;
+					if (candid_set[(*ed_list[candid_list[i].second])[j]] == 0)
+						candid_num.push_back((*ed_list[candid_list[i].second])[j]);
+					candid_set[(*ed_list[candid_list[i].second])[j]] ++;
 				}
 			}
 			int cnt;
-			for (int i = 0; i < l_cn; i++)
+			for (int i = 0; i < candid_num.size(); i++)
 			{
-				int tt = candid_num[i];
-				candid_ys[tt] = -1;
-				cnt = candid_set[i];
+				cnt = candid_set[candid_num[i]];
 				if (cnt < thres - f) continue;
 				if (myabs(context_len[candid_num[i]] - len) > threshold) continue;
-				for (int j = tmp; j < l_cl; j++)
+				for (int j = tmp; j < candid_list.size(); j++)
 				{
 					if (cnt >= thres) break;
 					int h = 0, t = candid_list[j].first, mid;
 					while (h < t - 1)
 					{
 						mid = (h + t) >> 1;
-						if ((*ed_list[candid_list[j].second])[mid] <= tt) h = mid; else t = mid;
+						if ((*ed_list[candid_list[j].second])[mid] <= candid_num[i]) h = mid; else t = mid;
 					}
-					if ((*ed_list[candid_list[j].second])[h] == tt) cnt ++;
+					if ((*ed_list[candid_list[j].second])[h] == candid_num[i]) cnt ++;
 				}	
 				if (cnt >= thres)
-				{
-					candid[l_c] = tt;
-					l_c ++;
-				}
+					candid.push_back(candid_num[i]);
 			}
 		}
+		delete[] word_list;
+		delete[] candid_set;
 	}
-	sort(candid, candid + l_c);
-	for (int i = 0; i < l_c; i++)
+	sort(candid.begin(),candid.end());
+	for (int i = 0; i < candid.size(); i++)
 	{
 		int num = verify_ed(query, len, context[candid[i]], context_len[candid[i]], threshold);
 		if (num <= threshold)
